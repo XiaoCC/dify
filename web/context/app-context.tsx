@@ -112,7 +112,8 @@ export const AppContextProvider: FC<AppContextProviderProps> = ({ children }) =>
       setUserProfile(result)
       // 将用户 ID 存储到 localStorage 中
       localStorage.setItem('userId', result.id)
-
+      // 将用户 email 存储到 localStorage 中
+      localStorage.setItem('email', result.email)
       const current_version = userProfileResponse.headers.get('x-version')
       const current_env = process.env.NODE_ENV === 'development' ? 'DEVELOPMENT' : userProfileResponse.headers.get('x-env')
       const versionData = await fetchLanggeniusVersion({ url: '/version', params: { current_version } })
