@@ -8,8 +8,8 @@ export let publicApiPrefix = ''
 
 // NEXT_PUBLIC_API_PREFIX=/console/api NEXT_PUBLIC_PUBLIC_API_PREFIX=/api npm run start
 if (process.env.NEXT_PUBLIC_API_PREFIX && process.env.NEXT_PUBLIC_PUBLIC_API_PREFIX) {
-  apiPrefix = window.location.protocol === 'https:' ? 'https://tllmops.sanfu.com:4431/console/api' : process.env.NEXT_PUBLIC_API_PREFIX
-  publicApiPrefix = window.location.protocol === 'https:' ? 'https://tllmops.sanfu.com:4431/api' : process.env.NEXT_PUBLIC_PUBLIC_API_PREFIX
+  apiPrefix = process.env.NEXT_PUBLIC_API_PREFIX
+  publicApiPrefix = process.env.NEXT_PUBLIC_PUBLIC_API_PREFIX
 }
 else if (
   globalThis.document?.body?.getAttribute('data-api-prefix')
