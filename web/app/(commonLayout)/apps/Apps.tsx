@@ -72,7 +72,6 @@ const Apps = () => {
     fetchAppList,
     { revalidateFirstPage: true },
   )
-
   const anchorRef = useRef<HTMLDivElement>(null)
   const options = [
     { value: 'all', text: t('app.types.all'), icon: <RiApps2Line className='w-[14px] h-[14px] mr-1' /> },
@@ -146,7 +145,7 @@ const Apps = () => {
       <nav className='grid content-start grid-cols-1 gap-4 px-12 pt-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 grow shrink-0'>
         {isCurrentWorkspaceEditor
           && <NewAppCard onSuccess={mutate} />}
-        {data?.map(({ data: apps }) => apps.map(app => (
+        {data?.map(({ data: apps }) => apps.filter(item => item.created_by === localStorage.getItem('userId')).map(app => (
           <AppCard key={app.id} app={app} onRefresh={mutate} />
         )))}
         <CheckModal />

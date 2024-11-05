@@ -72,7 +72,7 @@ const AppNav = () => {
 
   useEffect(() => {
     if (appsData) {
-      const appItems = flatten(appsData?.map(appData => appData.data))
+      const appItems = flatten(appsData?.map(appData => appData.data)).filter(item => item.created_by === localStorage.getItem('userId'))
       const navItems = appItems.map((app) => {
         const link = ((isCurrentWorkspaceEditor, app) => {
           if (!isCurrentWorkspaceEditor) {

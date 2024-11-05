@@ -105,10 +105,14 @@ export const AppContextProvider: FC<AppContextProviderProps> = ({ children }) =>
   const isCurrentWorkspaceOwner = useMemo(() => currentWorkspace.role === 'owner', [currentWorkspace.role])
   const isCurrentWorkspaceEditor = useMemo(() => ['owner', 'admin', 'editor'].includes(currentWorkspace.role), [currentWorkspace.role])
   const isCurrentWorkspaceDatasetOperator = useMemo(() => currentWorkspace.role === 'dataset_operator', [currentWorkspace.role])
+
   const updateUserProfileAndVersion = useCallback(async () => {
     if (userProfileResponse && !userProfileResponse.bodyUsed) {
       const result = await userProfileResponse.json()
       setUserProfile(result)
+      // 将用户 ID 存储到 localStorage 中
+      localStorage.setItem('userId', result.id)
+
       const current_version = userProfileResponse.headers.get('x-version')
       const current_env = process.env.NODE_ENV === 'development' ? 'DEVELOPMENT' : userProfileResponse.headers.get('x-env')
       const versionData = await fetchLanggeniusVersion({ url: '/version', params: { current_version } })
@@ -139,11 +143,13 @@ export const AppContextProvider: FC<AppContextProviderProps> = ({ children }) =>
   if (!appList || !userProfile)
     return <Loading type='app' />
 
+  // 过滤应用列表，只展示 created_by 与用户 ID 匹配的应用
+  const filteredApps = appList.data.filter(item => item.created_by === localStorage.getItem('userId'))
   return (
     <AppContext.Provider value={{
       theme,
       setTheme: handleSetTheme,
-      apps: appList.data,
+      apps: filteredApps, // 使用过滤后的应用列表
       systemFeatures,
       mutateApps,
       userProfile,

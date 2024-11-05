@@ -346,6 +346,8 @@ export type App = {
   app_model_config: ModelConfig
   /** Timestamp of creation */
   created_at: number
+  /** userId of creation */
+  created_by: string | null
   /** Web Application Configuration */
   site: SiteConfig
   /** api site url */
