@@ -15,12 +15,14 @@ from sqlalchemy.orm import Session
 
 from enums.quota_type import QuotaType
 from extensions.ext_database import db
+from extensions.sanfu_repository.repositories.pglog_workflow_trigger_log_repository import (
+    PgLogWorkflowTriggerLogRepository,
+)
 from models.account import Account
 from models.enums import CreatorUserRole, WorkflowTriggerStatus
 from models.model import App, EndUser
 from models.trigger import WorkflowTriggerLog
 from models.workflow import Workflow
-from repositories.sqlalchemy_workflow_trigger_log_repository import SQLAlchemyWorkflowTriggerLogRepository
 from services.errors.app import InvokeRateLimitError, QuotaExceededError, WorkflowNotFoundError
 from services.workflow.entities import AsyncTriggerResponse, TriggerData, WorkflowTaskData
 from services.workflow.queue_dispatcher import QueueDispatcherManager, QueuePriority
@@ -78,7 +80,7 @@ class AsyncWorkflowService:
             - Status tracking: Use workflow_trigger_log_id to monitor progress
             - Queue-based: Routes to different queues based on subscription tier
         """
-        trigger_log_repo = SQLAlchemyWorkflowTriggerLogRepository(session)
+        trigger_log_repo = PgLogWorkflowTriggerLogRepository(session)
         dispatcher_manager = QueueDispatcherManager()
         workflow_service = WorkflowService()
 
@@ -202,7 +204,7 @@ class AsyncWorkflowService:
             - Creates new trigger log: Original log marked as retrying, new log for execution
             - Preserves original trigger data: Uses same inputs and configuration
         """
-        trigger_log_repo = SQLAlchemyWorkflowTriggerLogRepository(session)
+        trigger_log_repo = PgLogWorkflowTriggerLogRepository(session)
 
         trigger_log = trigger_log_repo.get_by_id(workflow_trigger_log_id)
 
@@ -236,7 +238,7 @@ class AsyncWorkflowService:
             Trigger log as dictionary or None if not found
         """
         with Session(db.engine) as session:
-            trigger_log_repo = SQLAlchemyWorkflowTriggerLogRepository(session)
+            trigger_log_repo = PgLogWorkflowTriggerLogRepository(session)
             trigger_log = trigger_log_repo.get_by_id(workflow_trigger_log_id, tenant_id)
 
             if not trigger_log:
@@ -262,7 +264,7 @@ class AsyncWorkflowService:
             List of trigger logs as dictionaries
         """
         with Session(db.engine) as session:
-            trigger_log_repo = SQLAlchemyWorkflowTriggerLogRepository(session)
+            trigger_log_repo = PgLogWorkflowTriggerLogRepository(session)
             logs = trigger_log_repo.get_recent_logs(
                 tenant_id=tenant_id, app_id=app_id, hours=hours, limit=limit, offset=offset
             )
@@ -285,7 +287,7 @@ class AsyncWorkflowService:
             List of failed trigger logs as dictionaries
         """
         with Session(db.engine) as session:
-            trigger_log_repo = SQLAlchemyWorkflowTriggerLogRepository(session)
+            trigger_log_repo = PgLogWorkflowTriggerLogRepository(session)
             logs = trigger_log_repo.get_failed_for_retry(
                 tenant_id=tenant_id, max_retry_count=max_retry_count, limit=limit
             )

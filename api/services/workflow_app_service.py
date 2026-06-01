@@ -7,6 +7,8 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from core.workflow.enums import WorkflowExecutionStatus
+from extensions.sanfu_repository.database import get_sanfu_log_session_maker, sanfu_log_db_enabled
+from extensions.sanfu_repository.repositories.base import read_with_fallback
 from models import Account, App, EndUser, WorkflowAppLog, WorkflowRun
 from models.enums import AppTriggerType, CreatorUserRole
 from models.trigger import WorkflowTriggerLog
@@ -39,6 +41,75 @@ class WorkflowAppService:
         self,
         *,
         session: Session,
+        app_model: App,
+        keyword: str | None = None,
+        status: WorkflowExecutionStatus | None = None,
+        created_at_before: datetime | None = None,
+        created_at_after: datetime | None = None,
+        page: int = 1,
+        limit: int = 20,
+        detail: bool = False,
+        created_by_end_user_session_id: str | None = None,
+        created_by_account: str | None = None,
+    ):
+        if sanfu_log_db_enabled():
+            def read_from_log_db():
+                with get_sanfu_log_session_maker()() as log_session:
+                    return self._get_paginate_workflow_app_logs_with_session(
+                        session=log_session,
+                        lookup_session=session,
+                        app_model=app_model,
+                        keyword=keyword,
+                        status=status,
+                        created_at_before=created_at_before,
+                        created_at_after=created_at_after,
+                        page=page,
+                        limit=limit,
+                        detail=detail,
+                        created_by_end_user_session_id=created_by_end_user_session_id,
+                        created_by_account=created_by_account,
+                    )
+
+            return read_with_fallback(
+                read_from_log_db,
+                lambda: self._get_paginate_workflow_app_logs_with_session(
+                    session=session,
+                    lookup_session=session,
+                    app_model=app_model,
+                    keyword=keyword,
+                    status=status,
+                    created_at_before=created_at_before,
+                    created_at_after=created_at_after,
+                    page=page,
+                    limit=limit,
+                    detail=detail,
+                    created_by_end_user_session_id=created_by_end_user_session_id,
+                    created_by_account=created_by_account,
+                ),
+                operation="workflow_app_log.get_paginate_workflow_app_logs",
+                is_empty=lambda page_data: page_data["total"] == 0,
+            )
+
+        return self._get_paginate_workflow_app_logs_with_session(
+            session=session,
+            lookup_session=session,
+            app_model=app_model,
+            keyword=keyword,
+            status=status,
+            created_at_before=created_at_before,
+            created_at_after=created_at_after,
+            page=page,
+            limit=limit,
+            detail=detail,
+            created_by_end_user_session_id=created_by_end_user_session_id,
+            created_by_account=created_by_account,
+        )
+
+    def _get_paginate_workflow_app_logs_with_session(
+        self,
+        *,
+        session: Session,
+        lookup_session: Session,
         app_model: App,
         keyword: str | None = None,
         status: WorkflowExecutionStatus | None = None,
@@ -90,19 +161,28 @@ class WorkflowAppService:
             keyword_conditions = [
                 WorkflowRun.inputs.ilike(keyword_like_val),
                 WorkflowRun.outputs.ilike(keyword_like_val),
-                # filter keyword by end user session id if created by end user role
-                and_(WorkflowRun.created_by_role == "end_user", EndUser.session_id.ilike(keyword_like_val)),
             ]
+
+            end_user_ids = self._get_end_user_ids_by_session_keyword(
+                lookup_session=lookup_session,
+                tenant_id=app_model.tenant_id,
+                app_id=app_model.id,
+                keyword_like_val=keyword_like_val,
+            )
+            if end_user_ids:
+                keyword_conditions.append(
+                    and_(
+                        WorkflowRun.created_by_role == CreatorUserRole.END_USER,
+                        WorkflowRun.created_by.in_(end_user_ids),
+                    )
+                )
 
             # filter keyword by workflow run id
             keyword_uuid = self._safe_parse_uuid(keyword)
             if keyword_uuid:
                 keyword_conditions.append(WorkflowRun.id == keyword_uuid)
 
-            stmt = stmt.outerjoin(
-                EndUser,
-                and_(WorkflowRun.created_by == EndUser.id, WorkflowRun.created_by_role == CreatorUserRole.END_USER),
-            ).where(or_(*keyword_conditions))
+            stmt = stmt.where(or_(*keyword_conditions))
 
         if status:
             stmt = stmt.where(WorkflowRun.status == status)
@@ -116,26 +196,27 @@ class WorkflowAppService:
 
         # Filter by end user session id or account email
         if created_by_end_user_session_id:
-            stmt = stmt.join(
-                EndUser,
-                and_(
-                    WorkflowAppLog.created_by == EndUser.id,
-                    WorkflowAppLog.created_by_role == CreatorUserRole.END_USER,
-                    EndUser.session_id == created_by_end_user_session_id,
-                ),
+            end_user_ids = self._get_end_user_ids_by_session_id(
+                lookup_session=lookup_session,
+                tenant_id=app_model.tenant_id,
+                app_id=app_model.id,
+                session_id=created_by_end_user_session_id,
+            )
+            if not end_user_ids:
+                return self._empty_page(page, limit)
+
+            stmt = stmt.where(
+                WorkflowAppLog.created_by_role == CreatorUserRole.END_USER,
+                WorkflowAppLog.created_by.in_(end_user_ids),
             )
         if created_by_account:
-            account = session.scalar(select(Account).where(Account.email == created_by_account))
+            account = lookup_session.scalar(select(Account).where(Account.email == created_by_account))
             if not account:
                 raise ValueError(f"Account not found: {created_by_account}")
 
-            stmt = stmt.join(
-                Account,
-                and_(
-                    WorkflowAppLog.created_by == Account.id,
-                    WorkflowAppLog.created_by_role == CreatorUserRole.ACCOUNT,
-                    Account.id == account.id,
-                ),
+            stmt = stmt.where(
+                WorkflowAppLog.created_by == account.id,
+                WorkflowAppLog.created_by_role == CreatorUserRole.ACCOUNT,
             )
 
         stmt = stmt.order_by(WorkflowAppLog.created_at.desc())
@@ -165,6 +246,50 @@ class WorkflowAppService:
             "has_more": total > page * limit,
             "data": items,
         }
+
+    @staticmethod
+    def _empty_page(page: int, limit: int):
+        return {
+            "page": page,
+            "limit": limit,
+            "total": 0,
+            "has_more": False,
+            "data": [],
+        }
+
+    @staticmethod
+    def _get_end_user_ids_by_session_keyword(
+        *,
+        lookup_session: Session,
+        tenant_id: str,
+        app_id: str,
+        keyword_like_val: str,
+    ) -> list[str]:
+        stmt = (
+            select(EndUser.id)
+            .where(
+                EndUser.tenant_id == tenant_id,
+                EndUser.app_id == app_id,
+                EndUser.session_id.ilike(keyword_like_val),
+            )
+            .limit(100)
+        )
+        return list(lookup_session.scalars(stmt).all())
+
+    @staticmethod
+    def _get_end_user_ids_by_session_id(
+        *,
+        lookup_session: Session,
+        tenant_id: str,
+        app_id: str,
+        session_id: str,
+    ) -> list[str]:
+        stmt = select(EndUser.id).where(
+            EndUser.tenant_id == tenant_id,
+            EndUser.app_id == app_id,
+            EndUser.session_id == session_id,
+        )
+        return list(lookup_session.scalars(stmt).all())
 
     def handle_trigger_metadata(self, tenant_id: str, meta_val: str) -> dict[str, Any]:
         metadata: dict[str, Any] | None = self._safe_json_loads(meta_val)

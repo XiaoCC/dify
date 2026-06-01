@@ -10,6 +10,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 
 from extensions.ext_database import db
+from extensions.sanfu_repository.repositories.pglog_workflow_trigger_log_repository import (
+    delete_workflow_trigger_logs_by_app,
+)
+from extensions.sanfu_repository.workflow_app_log import delete_workflow_app_logs_by_app
 from models import (
     ApiToken,
     AppAnnotationHitHistory,
@@ -252,6 +256,7 @@ def _delete_app_workflow_app_logs(tenant_id: str, app_id: str):
         del_workflow_app_log,
         "workflow app log",
     )
+    delete_workflow_app_logs_by_app(tenant_id, app_id)
 
 
 def _delete_app_conversations(tenant_id: str, app_id: str):
@@ -556,6 +561,7 @@ def _delete_workflow_trigger_logs(tenant_id: str, app_id: str):
         del_trigger_log,
         "workflow trigger log",
     )
+    delete_workflow_trigger_logs_by_app(tenant_id, app_id)
 
 
 def _delete_records(query_sql: str, params: dict, delete_func: Callable, name: str) -> None:

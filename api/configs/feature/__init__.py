@@ -745,6 +745,95 @@ class RepositoryConfig(BaseSettings):
         default="repositories.sqlalchemy_api_workflow_run_repository.DifyAPISQLAlchemyWorkflowRunRepository",
     )
 
+    SANFU_LOG_DB_ENABLED: bool = Field(
+        description="Enable the Sanfu PostgreSQL workflow log database repository.",
+        default=False,
+    )
+
+    SANFU_LOG_DB_HOST: str = Field(
+        description="Hostname or IP address of the Sanfu workflow log database server.",
+        default="localhost",
+    )
+
+    SANFU_LOG_DB_PORT: PositiveInt = Field(
+        description="Port number for the Sanfu workflow log database connection.",
+        default=5432,
+    )
+
+    SANFU_LOG_DB_USERNAME: str = Field(
+        description="Username for the Sanfu workflow log database.",
+        default="postgres",
+    )
+
+    SANFU_LOG_DB_PASSWORD: str = Field(
+        description="Password for the Sanfu workflow log database.",
+        default="",
+    )
+
+    SANFU_LOG_DB_DATABASE: str = Field(
+        description="Database name for the Sanfu workflow log database.",
+        default="dify_log",
+    )
+
+    SANFU_LOG_DB_EXTRAS: str = Field(
+        description=(
+            "Additional PostgreSQL connection parameters for the Sanfu workflow log database."
+        ),
+        default="",
+    )
+
+    SANFU_LOG_DB_CHARSET: str = Field(
+        description="Client encoding for the Sanfu workflow log database connection.",
+        default="",
+    )
+
+    SANFU_LOG_DB_POOL_SIZE: NonNegativeInt = Field(
+        description="Maximum number of connections in the Sanfu workflow log database pool.",
+        default=20,
+    )
+
+    SANFU_LOG_DB_MAX_OVERFLOW: NonNegativeInt = Field(
+        description="Maximum overflow connections in the Sanfu workflow log database pool.",
+        default=10,
+    )
+
+    SANFU_LOG_DB_POOL_RECYCLE: NonNegativeInt = Field(
+        description="Seconds after which a Sanfu workflow log database connection is recycled.",
+        default=3600,
+    )
+
+    SANFU_LOG_DB_POOL_PRE_PING: bool = Field(
+        description="Enable SQLAlchemy pre-ping for the Sanfu workflow log database pool.",
+        default=True,
+    )
+
+    SANFU_LOG_DB_POOL_TIMEOUT: NonNegativeInt = Field(
+        description="Seconds to wait for a Sanfu workflow log database connection from the pool.",
+        default=30,
+    )
+
+    SANFU_LOG_DB_AUTO_CREATE_TABLES: bool = Field(
+        description="Create workflow log tables and indexes in the Sanfu log database on startup.",
+        default=False,
+    )
+
+    SANFU_LOG_REPOSITORY_DUAL_WRITE: bool = Field(
+        description=(
+            "Write workflow run and node execution records to both main DB and Sanfu log DB."
+        ),
+        default=True,
+    )
+
+    SANFU_LOG_REPOSITORY_READ_FROM_LOG_DB: bool = Field(
+        description="Read workflow run and node execution records from the Sanfu log DB first.",
+        default=False,
+    )
+
+    SANFU_LOG_REPOSITORY_FALLBACK_TO_MAIN_DB: bool = Field(
+        description="Fallback to the main DB when Sanfu log DB reads or writes fail.",
+        default=True,
+    )
+
 
 class AuthConfig(BaseSettings):
     """

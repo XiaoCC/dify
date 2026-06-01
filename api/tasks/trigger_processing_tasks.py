@@ -28,6 +28,10 @@ from core.workflow.enums import NodeType, WorkflowExecutionStatus
 from core.workflow.nodes.trigger_plugin.entities import TriggerEventNodeData
 from enums.quota_type import QuotaType, unlimited
 from extensions.ext_database import db
+from extensions.sanfu_repository.repositories.pglog_workflow_trigger_log_repository import (
+    PgLogWorkflowTriggerLogRepository,
+)
+from extensions.sanfu_repository.workflow_app_log import save_workflow_app_log
 from models.enums import (
     AppTriggerType,
     CreatorUserRole,
@@ -182,7 +186,7 @@ def _record_trigger_failure_log(
         created_by_role=created_by_role.value,
         created_by=created_by,
     )
-    session.add(workflow_app_log)
+    save_workflow_app_log(session, workflow_app_log)
 
     dispatcher = QueueDispatcherManager.get_dispatcher(subscription.tenant_id)
     queue_name = dispatcher.get_queue_name()
@@ -221,7 +225,7 @@ def _record_trigger_failure_log(
         outputs=None,
         celery_task_id=None,
     )
-    session.add(trigger_log)
+    PgLogWorkflowTriggerLogRepository(session).create(trigger_log)
     session.commit()
 
 

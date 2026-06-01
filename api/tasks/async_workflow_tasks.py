@@ -17,12 +17,14 @@ from core.app.apps.workflow.app_generator import SKIP_PREPARE_USER_INPUTS_KEY, W
 from core.app.entities.app_invoke_entities import InvokeFrom
 from core.app.layers.trigger_post_layer import TriggerPostLayer
 from extensions.ext_database import db
+from extensions.sanfu_repository.repositories.pglog_workflow_trigger_log_repository import (
+    PgLogWorkflowTriggerLogRepository,
+)
 from models.account import Account
 from models.enums import CreatorUserRole, WorkflowTriggerStatus
 from models.model import App, EndUser, Tenant
 from models.trigger import WorkflowTriggerLog
 from models.workflow import Workflow
-from repositories.sqlalchemy_workflow_trigger_log_repository import SQLAlchemyWorkflowTriggerLogRepository
 from services.errors.app import WorkflowNotFoundError
 from services.workflow.entities import (
     TriggerData,
@@ -102,7 +104,7 @@ def _execute_workflow_common(
     session_factory = sessionmaker(bind=db.engine, expire_on_commit=False)
 
     with session_factory() as session:
-        trigger_log_repo = SQLAlchemyWorkflowTriggerLogRepository(session)
+        trigger_log_repo = PgLogWorkflowTriggerLogRepository(session)
 
         # Get trigger log
         trigger_log = trigger_log_repo.get_by_id(task_data.workflow_trigger_log_id)

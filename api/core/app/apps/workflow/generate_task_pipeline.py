@@ -56,6 +56,7 @@ from core.workflow.repositories.draft_variable_repository import DraftVariableSa
 from core.workflow.runtime import GraphRuntimeState
 from core.workflow.system_variable import SystemVariable
 from extensions.ext_database import db
+from extensions.sanfu_repository.workflow_app_log import save_workflow_app_log
 from models import Account
 from models.enums import CreatorUserRole
 from models.model import EndUser
@@ -647,7 +648,7 @@ class WorkflowAppGenerateTaskPipeline(GraphRuntimeStateSupport):
             created_by=self._user_id,
         )
 
-        session.add(workflow_app_log)
+        save_workflow_app_log(session, workflow_app_log)
 
     def _text_chunk_to_stream_response(
         self, text: str, from_variable_selector: list[str] | None = None

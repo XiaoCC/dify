@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session, sessionmaker
 from core.workflow.graph_engine.layers.base import GraphEngineLayer
 from core.workflow.graph_events.base import GraphEngineEvent
 from core.workflow.graph_events.graph import GraphRunFailedEvent, GraphRunPausedEvent, GraphRunSucceededEvent
+from extensions.sanfu_repository.repositories.pglog_workflow_trigger_log_repository import (
+    PgLogWorkflowTriggerLogRepository,
+)
 from models.enums import WorkflowTriggerStatus
-from repositories.sqlalchemy_workflow_trigger_log_repository import SQLAlchemyWorkflowTriggerLogRepository
 from tasks.workflow_cfs_scheduler.cfs_scheduler import AsyncWorkflowCFSPlanEntity
 
 logger = logging.getLogger(__name__)
@@ -47,7 +49,7 @@ class TriggerPostLayer(GraphEngineLayer):
         """
         if isinstance(event, tuple(self._STATUS_MAP.keys())):
             with self.session_maker() as session:
-                repo = SQLAlchemyWorkflowTriggerLogRepository(session)
+                repo = PgLogWorkflowTriggerLogRepository(session)
                 trigger_log = repo.get_by_id(self.trigger_log_id)
                 if not trigger_log:
                     logger.exception("Trigger log not found: %s", self.trigger_log_id)
