@@ -502,9 +502,11 @@ class AdvancedChatAppGenerateTaskPipeline(GraphRuntimeStateSupport):
             graph_runtime_state=validated_state,
         )
 
-        yield from self._handle_advanced_chat_message_end_event(
-            QueueAdvancedChatMessageEndEvent(), graph_runtime_state=validated_state
+        message_end_responses = self._finalize_workflow_message(
+            outputs=event.outputs,
+            graph_runtime_state=validated_state,
         )
+        yield from message_end_responses
         yield workflow_finish_resp
 
     def _handle_workflow_partial_success_event(
@@ -526,9 +528,11 @@ class AdvancedChatAppGenerateTaskPipeline(GraphRuntimeStateSupport):
             exceptions_count=event.exceptions_count,
         )
 
-        yield from self._handle_advanced_chat_message_end_event(
-            QueueAdvancedChatMessageEndEvent(), graph_runtime_state=validated_state
+        message_end_responses = self._finalize_workflow_message(
+            outputs=event.outputs,
+            graph_runtime_state=validated_state,
         )
+        yield from message_end_responses
         yield workflow_finish_resp
 
     def _handle_workflow_failed_event(
@@ -623,6 +627,37 @@ class AdvancedChatAppGenerateTaskPipeline(GraphRuntimeStateSupport):
             self._save_message(session=session, graph_runtime_state=resolved_state)
 
         yield self._message_end_to_stream_response()
+
+    def _finalize_workflow_message(
+        self,
+        *,
+        outputs: Mapping[str, object],
+        graph_runtime_state: GraphRuntimeState,
+    ) -> list[StreamResponse]:
+        self._recover_answer_from_workflow_outputs(outputs)
+        responses = list(
+            self._handle_advanced_chat_message_end_event(
+                QueueAdvancedChatMessageEndEvent(),
+                graph_runtime_state=graph_runtime_state,
+            )
+        )
+        self._base_task_pipeline.queue_manager.stop_listen()
+        return responses
+
+    def _recover_answer_from_workflow_outputs(self, outputs: Mapping[str, object]) -> None:
+        if self._task_state.answer.strip():
+            return
+
+        workflow_answer = outputs.get("answer")
+        if not isinstance(workflow_answer, str) or not workflow_answer.strip():
+            return
+
+        self._task_state.answer = workflow_answer
+        logger.warning(
+            "Recovered an empty message answer from workflow outputs, message_id=%s, workflow_run_id=%s",
+            self._message_id,
+            self._workflow_run_id,
+        )
 
     def _handle_retriever_resources_event(
         self, event: QueueRetrieverResourcesEvent, **kwargs
