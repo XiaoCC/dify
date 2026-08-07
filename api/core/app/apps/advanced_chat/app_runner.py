@@ -3,7 +3,7 @@ import time
 from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from core.app.apps.advanced_chat.app_config_manager import AdvancedChatAppConfig
@@ -36,6 +36,7 @@ from core.workflow.workflow_entry import WorkflowEntry
 from extensions.ext_database import db
 from extensions.ext_redis import redis_client
 from extensions.otel import WorkflowAppRunnerHandler, trace_span
+from libs.datetime_utils import naive_utc_now
 from models import Workflow
 from models.enums import UserFrom
 from models.model import App, Conversation, Message, MessageAnnotation
@@ -83,6 +84,7 @@ class AdvancedChatAppRunner(WorkflowBasedAppRunner):
 
     @trace_span(WorkflowAppRunnerHandler)
     def run(self):
+        run_started_at = time.perf_counter()
         app_config = self.application_generate_entity.app_config
         app_config = cast(AdvancedChatAppConfig, app_config)
 
@@ -207,6 +209,63 @@ class AdvancedChatAppRunner(WorkflowBasedAppRunner):
 
         for event in generator:
             self._handle_event(workflow_entry, event)
+
+        self._backfill_message_answer(graph_runtime_state, run_started_at)
+
+    def _backfill_message_answer(
+        self, graph_runtime_state: GraphRuntimeState, run_started_at: float | None = None
+    ) -> None:
+        """
+        Backfill an empty message answer from the workflow outputs.
+
+        The request thread persists the message answer and its usage when it consumes
+        the workflow completion events, which only happens while the client connection
+        is alive. If the client disconnects early, that persistence never runs. This
+        method runs on the worker thread right after the workflow finishes, so the
+        answer and usage metrics are persisted regardless of the client connection
+        state. It only updates the message when the answer is still empty, leaving
+        already-persisted answers untouched.
+        """
+        outputs = graph_runtime_state.outputs or {}
+        answer = outputs.get("answer")
+        if not isinstance(answer, str) or not answer.strip():
+            return
+
+        values: dict[str, Any] = {
+            "answer": answer,
+            "updated_at": naive_utc_now(),
+        }
+
+        usage = graph_runtime_state.llm_usage
+        if usage:
+            values.update(
+                {
+                    "message_tokens": usage.prompt_tokens,
+                    "message_unit_price": usage.prompt_unit_price,
+                    "message_price_unit": usage.prompt_price_unit,
+                    "answer_tokens": usage.completion_tokens,
+                    "answer_unit_price": usage.completion_unit_price,
+                    "answer_price_unit": usage.completion_price_unit,
+                    "total_price": usage.total_price,
+                    "currency": usage.currency,
+                }
+            )
+
+        if run_started_at is not None:
+            values["provider_response_latency"] = time.perf_counter() - run_started_at
+
+        with Session(db.engine, expire_on_commit=False) as session:
+            result = session.execute(
+                update(Message)
+                .where(Message.id == self.message.id, Message.answer == "")
+                .values(**values)
+            )
+            session.commit()
+            if result.rowcount:
+                logger.warning(
+                    "Backfilled an empty message answer from workflow outputs, message_id=%s",
+                    self.message.id,
+                )
 
     def handle_input_moderation(
         self,
